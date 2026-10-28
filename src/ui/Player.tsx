@@ -173,16 +173,19 @@ export default function Player({ meta }: { meta: EffectMeta }) {
 
   return (
     <div className="player">
-      <div className={`frame ${meta.facing === "user" ? "mirror" : ""}`} style={{ "--ar": aspect } as React.CSSProperties}>
+      <div
+        className={`frame ${meta.facing === "user" && !meta.selfMirror ? "mirror" : ""}`}
+        style={{ "--ar": aspect } as React.CSSProperties}
+      >
         <video ref={videoRef} playsInline muted />
-        {running && Effect && hubRef.current && (
+        {running && Effect && hubRef.current && videoRef.current && (
           <Canvas
             camera={{ fov: 63, near: 1, far: 2000, position: [0, 0, 0] }}
             gl={{ alpha: true, antialias: quality !== "low", powerPreference: "high-performance" }}
             dpr={DPR[quality]}
           >
             <PerfProbe monitor={perfRef.current} />
-            <Effect hub={hubRef.current} quality={quality} notify={notify} />
+            <Effect hub={hubRef.current} quality={quality} notify={notify} video={videoRef.current} />
           </Canvas>
         )}
       </div>

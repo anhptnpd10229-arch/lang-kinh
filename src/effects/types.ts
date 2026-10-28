@@ -29,12 +29,19 @@ export type EffectMeta = {
   accent: string;
   status: "ready" | "soon";
   year: number;
+  /**
+   * Effect tự vẽ cả cảnh (kể cả video) và tự xử lý lật gương; Player không lật khung bằng CSS.
+   * Dùng khi cảnh có chữ hoặc bố cục không được phép bị lật.
+   */
+  selfMirror?: boolean;
 };
 
 /** Props mọi component effect nhận được. Đọc `hub.results` trong `useFrame`, không lưu vào state React. */
 export type EffectProps = {
   hub: TrackerHub;
   quality: Quality;
+  /** Video camera (chưa lật gương), để effect dùng làm texture hoặc chụp khung hình cục bộ. */
+  video: HTMLVideoElement;
   /** Hiện một thông báo ngắn trên thanh điều khiển (vd: cử chỉ vừa kích hoạt). Chỉ gọi khi có sự kiện, không gọi mỗi khung hình. */
   notify?: (message: string) => void;
 };

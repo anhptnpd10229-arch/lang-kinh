@@ -5,7 +5,6 @@
 // - Giơ 3 ngón (giữ): bật bút; giơ 3 ngón lần nữa: tắt bút. Bút tắt thì chụm tay không vẽ.
 // - Chụm ngón cái + trỏ (giữ một nhịp ngắn) khi bút bật: vẽ. Tay càng gần camera nét càng dày.
 // - Hai tay cùng chụm: xoay và phóng to/thu nhỏ nét vừa vẽ.
-// - Nắm tay gần một nét: nhặt nét đó lên và kéo đi.
 // - ✌️ giữ: đổi kiểu bút (neon → bụi sao → cầu vồng).
 // - 👍 giữ: các nét nhún nhảy vài giây.
 // - 👎 giữ: hoàn tác nét cuối.
@@ -34,7 +33,6 @@ const MIN_SIZE = 3;
 const LOST_MS = 300;
 const DIE_MS = 400;
 const DANCE_MS = 3000;
-const GRAB_RADIUS = 12;
 const LINE_RADIUS = 0.35;
 /** Kích thước bàn tay chuẩn (toạ độ chuẩn hoá) ứng với độ dày LINE_RADIUS. */
 const REF_HAND_SIZE = 0.15;
@@ -79,7 +77,7 @@ type HandInfo = {
 type TwoHand = { stroke: Stroke; d0: number; a0: number; s0: number; r0: number };
 
 export type StudioEvent =
-  | { type: "stroke_start" | "stroke" | "discard" | "clear" | "undo" | "dance" | "grab" | "transform" }
+  | { type: "stroke_start" | "stroke" | "discard" | "clear" | "undo" | "dance" | "transform" }
   | { type: "brush"; brush: Brush }
   | { type: "pen"; on: boolean };
 
@@ -116,8 +114,6 @@ export class AirStudio {
   private holdSince = 0;
   private holdFired = false;
   private danceUntil = 0;
-  private grabbed: Stroke | null = null;
-  private grabPrev = new THREE.Vector3();
   private twoHand: TwoHand | null = null;
   private cursors: THREE.Mesh<THREE.CircleGeometry, THREE.MeshBasicMaterial>[];
   private skeleton: THREE.LineSegments;
@@ -171,7 +167,6 @@ export class AirStudio {
 
   clearAll(now: number) {
     this.strokes.forEach((s) => (s.dying ||= now));
-    this.grabbed = null;
     this.twoHand = null;
     this.emit({ type: "clear" });
   }
@@ -191,7 +186,6 @@ export class AirStudio {
     this.pinchSince = [0, 0];
     this.releaseSince = 0;
     this.penLocked = false;
-    this.grabbed = null;
     this.twoHand = null;
     this.holdName = "None";
     // Không làm mượt từ vị trí cũ khi tay quay lại, tránh vệt nối dài.
@@ -266,9 +260,6 @@ export class AirStudio {
     const actor = three ?? info.find((p) => !p.pinched && !p.arming && p.gesture && p.gesture.score > MIN_GESTURE_SCORE);
     const name = three ? THREE_FINGERS : (actor?.gesture?.categoryName ?? "None");
     this.hold(name, ts);
-
-    if (name === "Closed_Fist" && actor) this.dragWithFist(actor.tip);
-    else this.grabbed = null;
   }
 
   /** Kích hoạt cử chỉ một lần sau khi giữ đủ lâu; phải đổi cử chỉ mới kích hoạt lại. */
@@ -304,26 +295,7 @@ export class AirStudio {
     const last = [...this.strokes].reverse().find((s) => !s.dying);
     if (!last) return;
     last.dying = now;
-    if (this.grabbed === last) this.grabbed = null;
     this.emit({ type: "undo" });
-  }
-
-  private dragWithFist(at: THREE.Vector3) {
-    if (!this.grabbed) {
-      let best: Stroke | null = null;
-      let bestD = GRAB_RADIUS;
-      for (const s of this.strokes) {
-        const d = s.dying ? Infinity : s.group.position.distanceTo(at);
-        if (d < bestD) [best, bestD] = [s, d];
-      }
-      if (!best) return;
-      this.grabbed = best;
-      this.grabPrev.copy(at);
-      this.emit({ type: "grab" });
-      return;
-    }
-    this.grabbed.group.position.add(at.clone().sub(this.grabPrev));
-    this.grabPrev.copy(at);
   }
 
   private transformTwoHand(a: THREE.Vector3, b: THREE.Vector3) {
@@ -545,8 +517,7 @@ export class AirStudio {
         return false;
       }
       const wob = dance * Math.sin((now / 1000) * 8 + s.phase);
-      const lifted = s === this.grabbed ? 1.08 : 1;
-      s.group.scale.setScalar(s.scale * (1 + 0.12 * wob) * lifted * life);
+      s.group.scale.setScalar(s.scale * (1 + 0.12 * wob) * life);
       s.group.rotation.z = s.rot + 0.18 * wob;
       return true;
     });

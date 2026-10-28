@@ -6,6 +6,6 @@ import type { EffectProps } from "./types";
 type Loader = () => Promise<{ default: ComponentType<EffectProps> }>;
 
 export const EFFECT_LOADERS: Record<string, Loader> = {
-  "mat-na-tinh-the": () => import("./mat-na-tinh-the/Effect"),
   "net-ve-khong-trung": () => import("./net-ve-khong-trung/Effect"),
+  "tiem-giat": () => import("./tiem-giat/Effect"),
 };

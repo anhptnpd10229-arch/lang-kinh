@@ -1,7 +1,7 @@
 // Danh mục tác phẩm. Thêm tác phẩm mới: tạo thư mục src/effects/<slug>/ với meta.ts + Effect.tsx,
 // thêm meta vào EFFECTS bên dưới và thêm loader trong loaders.ts.
-import { meta as matNaTinhThe } from "./mat-na-tinh-the/meta";
 import { meta as netVeKhongTrung } from "./net-ve-khong-trung/meta";
+import { meta as tiemGiat } from "./tiem-giat/meta";
 import type { EffectMeta } from "./types";
 
 const SOON: EffectMeta[] = [
@@ -63,7 +63,7 @@ const SOON: EffectMeta[] = [
   },
 ];
 
-export const EFFECTS: EffectMeta[] = [matNaTinhThe, netVeKhongTrung, ...SOON];
+export const EFFECTS: EffectMeta[] = [netVeKhongTrung, tiemGiat, ...SOON];
 
 export const READY_EFFECTS = EFFECTS.filter((e) => e.status === "ready");
 

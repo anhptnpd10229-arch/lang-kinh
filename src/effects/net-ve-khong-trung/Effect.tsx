@@ -29,8 +29,6 @@ function message(e: StudioEvent): string | null {
       return "👎 Hoàn tác";
     case "clear":
       return "🖐 Đã xoá";
-    case "grab":
-      return "✊ Đã nhặt nét vẽ — kéo để di chuyển";
     case "transform":
       return "🤏🤏 Xoay hoặc kéo giãn hai tay để biến đổi";
     default:
