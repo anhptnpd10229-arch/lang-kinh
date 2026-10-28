@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "spike",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "serve@14.2.4", "spike", "-l", "5173"],
+      "port": 5173
+    }
+  ]
+}

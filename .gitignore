@@ -1,0 +1,10 @@
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+certificates/
+.env*.local
+
+# Sinh bởi scripts/fetch-models.mjs
+public/mediapipe/

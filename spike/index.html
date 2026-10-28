@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Spike MediaPipe – đo FPS</title>
+<style>
+  :root { --bg:#0b0b0c; --fg:#f2f0eb; --muted:#8a8780; --accent:#c8ff3d; --danger:#ff4d4d; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--fg);
+    font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  #stage { position:fixed; inset:0; display:grid; place-items:center; overflow:hidden; }
+  #stage video, #stage canvas { position:absolute; width:100%; height:100%; object-fit:cover; }
+  .mirror { transform: scaleX(-1); }
+  #panel { position:fixed; left:12px; right:12px; bottom:12px; max-width:520px;
+    background:rgba(11,11,12,.82); backdrop-filter:blur(8px); border:1px solid #2a2a2a;
+    border-radius:10px; padding:12px; display:grid; gap:10px; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  select, button { font:inherit; color:var(--fg); background:#1a1a1c; border:1px solid #333;
+    border-radius:6px; padding:8px 10px; }
+  button.primary { background:var(--accent); color:#000; border:none; font-weight:700; }
+  #stats { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+  #stats div { background:#141416; border-radius:6px; padding:6px 8px; }
+  #stats b { display:block; font-size:18px; }
+  #stats span { color:var(--muted); font-size:11px; }
+  #msg { color:var(--muted); min-height:1.4em; }
+  #msg.err { color:var(--danger); }
+  #live { position:fixed; top:12px; left:12px; display:none; align-items:center; gap:6px;
+    background:rgba(0,0,0,.6); padding:6px 10px; border-radius:999px; }
+  #live::before { content:""; width:8px; height:8px; border-radius:50%; background:var(--danger); }
+  #intro { max-width:520px; padding:24px; }
+  #intro h1 { font-size:clamp(28px,7vw,56px); line-height:1; margin:0 0 12px; letter-spacing:-.02em; }
+  #intro p { color:var(--muted); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="intro">
+    <h1>Spike<br/>MediaPipe</h1>
+    <p>Đo FPS của face / hand / pose / segmentation trên thiết bị này. Hình ảnh được xử lý ngay trên máy, không ghi lại, không gửi đi đâu.</p>
+  </div>
+  <video id="video" class="mirror" playsinline muted></video>
+  <canvas id="overlay" class="mirror"></canvas>
+</div>
+<div id="live">Camera đang bật</div>
+
+<div id="panel">
+  <div class="row">
+    <select id="task" aria-label="Mô hình">
+      <option value="face">Khuôn mặt (FaceLandmarker)</option>
+      <option value="hand">Bàn tay + cử chỉ (GestureRecognizer)</option>
+      <option value="pose">Tư thế (PoseLandmarker lite)</option>
+      <option value="seg">Tách người (ImageSegmenter)</option>
+    </select>
+    <select id="delegate" aria-label="Bộ xử lý">
+      <option value="GPU">GPU</option>
+      <option value="CPU">CPU</option>
+    </select>
+    <select id="res" aria-label="Độ phân giải">
+      <option value="480">480p</option>
+      <option value="720">720p</option>
+    </select>
+  </div>
+  <div class="row">
+    <button id="start" class="primary">Bắt đầu</button>
+    <button id="stop" disabled>Tắt camera</button>
+    <button id="copy" disabled>Sao chép kết quả</button>
+  </div>
+  <div id="stats">
+    <div><b id="fps">–</b><span>FPS hiển thị</span></div>
+    <div><b id="inf">–</b><span>ms suy luận (TB)</span></div>
+    <div><b id="det">–</b><span>đối tượng</span></div>
+    <div><b id="load">–</b><span>ms tải mô hình</span></div>
+  </div>
+  <div id="msg"></div>
+</div>
+
+<script type="module">
+import {
+  FilesetResolver, FaceLandmarker, GestureRecognizer, PoseLandmarker, ImageSegmenter, DrawingUtils
+} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm";
+const MODELS = {
+  face: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+  hand: "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task",
+  pose: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+  seg:  "https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/latest/selfie_segmenter.tflite",
+};
+
+const $ = (id) => document.getElementById(id);
+const video = $("video"), canvas = $("overlay"), ctx = canvas.getContext("2d");
+const draw = new DrawingUtils(ctx);
+const maskCanvas = document.createElement("canvas"), maskCtx = maskCanvas.getContext("2d");
+
+let stream = null, runner = null, fileset = null, running = false, lastTs = -1;
+let frames = 0, infSum = 0, infN = 0, fpsT0 = 0, lastDet = 0, loadMs = 0;
+const samples = [];
+
+function msg(text, isErr = false) { $("msg").textContent = text; $("msg").className = isErr ? "err" : ""; }
+
+function support() {
+  const gl2 = !!document.createElement("canvas").getContext("webgl2");
+  return {
+    secure: window.isSecureContext,
+    media: !!navigator.mediaDevices?.getUserMedia,
+    webgl2: gl2,
+    wasm: typeof WebAssembly === "object",
+  };
+}
+
+const CAMERA_ERRORS = {
+  NotAllowedError: "Bạn đã từ chối quyền camera. Hãy bật lại trong cài đặt trang của trình duyệt rồi thử lại.",
+  NotFoundError: "Không tìm thấy camera trên thiết bị này.",
+  NotReadableError: "Camera đang được ứng dụng khác sử dụng.",
+  OverconstrainedError: "Camera không hỗ trợ độ phân giải đã chọn. Thử 480p.",
+  SecurityError: "Trình duyệt chặn camera (cần HTTPS hoặc localhost).",
+};
+
+async function createRunner(task, delegate) {
+  fileset ??= await FilesetResolver.forVisionTasks(WASM);
+  const base = { baseOptions: { modelAssetPath: MODELS[task], delegate }, runningMode: "VIDEO" };
+  switch (task) {
+    case "face": return FaceLandmarker.createFromOptions(fileset, { ...base, numFaces: 1, outputFaceBlendshapes: true, outputFacialTransformationMatrixes: true });
+    case "hand": return GestureRecognizer.createFromOptions(fileset, { ...base, numHands: 2 });
+    case "pose": return PoseLandmarker.createFromOptions(fileset, { ...base, numPoses: 1 });
+    case "seg":  return ImageSegmenter.createFromOptions(fileset, { ...base, outputCategoryMask: false, outputConfidenceMasks: true });
+  }
+}
+
+function render(task, ts) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const t0 = performance.now();
+  let count = 0;
+
+  if (task === "seg") {
+    runner.segmentForVideo(video, ts, (r) => {
+      const mask = r.confidenceMasks?.[0];
+      if (!mask) return;
+      const data = mask.getAsFloat32Array();
+      const img = ctx.createImageData(mask.width, mask.height);
+      let px = 0;
+      for (let i = 0; i < data.length; i++) {
+        const a = data[i];
+        if (a > 0.5) px++;
+        img.data[i * 4] = 200; img.data[i * 4 + 1] = 255; img.data[i * 4 + 2] = 61; img.data[i * 4 + 3] = a * 140;
+      }
+      maskCanvas.width = mask.width; maskCanvas.height = mask.height;
+      maskCtx.putImageData(img, 0, 0);
+      ctx.drawImage(maskCanvas, 0, 0, canvas.width, canvas.height);
+      count = px > data.length * 0.02 ? 1 : 0;
+    });
+  } else if (task === "face") {
+    const r = runner.detectForVideo(video, ts);
+    for (const lm of r.faceLandmarks) {
+      draw.drawConnectors(lm, FaceLandmarker.FACE_LANDMARKS_TESSELATION, { color: "#c8ff3d55", lineWidth: 1 });
+    }
+    count = r.faceLandmarks.length;
+  } else if (task === "hand") {
+    const r = runner.recognizeForVideo(video, ts);
+    r.landmarks.forEach((lm, i) => {
+      draw.drawConnectors(lm, GestureRecognizer.HAND_CONNECTIONS, { color: "#c8ff3d", lineWidth: 3 });
+      draw.drawLandmarks(lm, { color: "#ffffff", radius: 3 });
+      const g = r.gestures[i]?.[0];
+      if (g) msg(`Cử chỉ: ${g.categoryName} (${(g.score * 100).toFixed(0)}%)`);
+    });
+    count = r.landmarks.length;
+  } else if (task === "pose") {
+    const r = runner.detectForVideo(video, ts);
+    for (const lm of r.landmarks) {
+      draw.drawConnectors(lm, PoseLandmarker.POSE_CONNECTIONS, { color: "#c8ff3d", lineWidth: 3 });
+      draw.drawLandmarks(lm, { color: "#ffffff", radius: 2 });
+    }
+    count = r.landmarks.length;
+  }
+
+  infSum += performance.now() - t0; infN++;
+  lastDet = count;
+}
+
+function loop() {
+  if (!running) return;
+  const task = $("task").value;
+  let ts = performance.now();
+  if (ts <= lastTs) ts = lastTs + 1; // MediaPipe yêu cầu timestamp tăng dần
+  lastTs = ts;
+  if (video.readyState >= 2) render(task, ts);
+
+  frames++;
+  const now = performance.now();
+  if (now - fpsT0 >= 1000) {
+    const fps = (frames * 1000) / (now - fpsT0);
+    const inf = infN ? infSum / infN : 0;
+    $("fps").textContent = fps.toFixed(0);
+    $("inf").textContent = inf.toFixed(1);
+    $("det").textContent = lastDet;
+    samples.push({ fps, inf });
+    if (samples.length > 30) samples.shift();
+    frames = 0; infSum = 0; infN = 0; fpsT0 = now;
+  }
+  if ("requestVideoFrameCallback" in video) video.requestVideoFrameCallback(loop);
+  else requestAnimationFrame(loop);
+}
+
+async function start() {
+  const s = support();
+  if (!s.secure || !s.media) return msg("Trình duyệt chưa hỗ trợ camera ở đây (cần HTTPS hoặc localhost, và không phải webview trong ứng dụng).", true);
+  if (!s.webgl2) msg("Không có WebGL2 – sẽ thử với CPU.");
+
+  $("start").disabled = true;
+  const h = Number($("res").value);
+  try {
+    // Chỉ xin quyền camera khi người dùng bấm "Bắt đầu"
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { facingMode: "user", width: { ideal: h === 720 ? 1280 : 640 }, height: { ideal: h } },
+    });
+  } catch (e) {
+    $("start").disabled = false;
+    return msg(CAMERA_ERRORS[e.name] ?? `Lỗi camera: ${e.name || e}`, true);
+  }
+  video.srcObject = stream;
+  await video.play();
+  canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+  $("intro").style.display = "none";
+  $("live").style.display = "flex";
+  $("stop").disabled = false;
+  await switchModel();
+}
+
+async function switchModel() {
+  if (!stream) return;
+  running = false;
+  runner?.close(); runner = null;
+  samples.length = 0;
+  const task = $("task").value;
+  msg("Đang tải mô hình…");
+  const t0 = performance.now();
+  try {
+    runner = await createRunner(task, $("delegate").value);
+  } catch (e) {
+    console.error(e);
+    return msg(`Không tải được mô hình (${$("delegate").value}). Thử chuyển sang CPU. Chi tiết: ${e.message ?? e}`, true);
+  }
+  loadMs = performance.now() - t0;
+  $("load").textContent = loadMs.toFixed(0);
+  msg("Đang chạy. Để yên ~30 giây rồi bấm \"Sao chép kết quả\".");
+  $("copy").disabled = false;
+  running = true; fpsT0 = performance.now(); frames = 0;
+  loop();
+}
+
+function stop() {
+  running = false;
+  runner?.close(); runner = null;
+  stream?.getTracks().forEach((t) => t.stop());
+  stream = null; video.srcObject = null;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  $("live").style.display = "none";
+  $("intro").style.display = "";
+  $("start").disabled = false; $("stop").disabled = true; $("copy").disabled = true;
+  msg("Đã tắt camera.");
+}
+
+async function copyResult() {
+  const avg = (k) => samples.reduce((a, s) => a + s[k], 0) / (samples.length || 1);
+  const sorted = [...samples].map((s) => s.fps).sort((a, b) => a - b);
+  const row = {
+    task: $("task").value, delegate: $("delegate").value, res: `${video.videoWidth}x${video.videoHeight}`,
+    fpsAvg: +avg("fps").toFixed(1), fpsMin: +(sorted[0] ?? 0).toFixed(1), infMs: +avg("inf").toFixed(1),
+    loadMs: Math.round(loadMs), seconds: samples.length, ua: navigator.userAgent, ...support(),
+  };
+  const text = JSON.stringify(row);
+  try { await navigator.clipboard.writeText(text); msg("Đã sao chép. Dán vào spike/RESULTS.md."); }
+  catch { prompt("Sao chép dòng này:", text); }
+}
+
+$("start").onclick = start;
+$("stop").onclick = stop;
+$("copy").onclick = copyResult;
+$("task").onchange = switchModel;
+$("delegate").onchange = switchModel;
+$("res").onchange = () => { if (stream) { stop(); start(); } };
+document.addEventListener("visibilitychange", () => { if (document.hidden && stream) stop(); });
+</script>
+</body>
+</html>
