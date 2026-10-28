@@ -35,4 +35,6 @@ export type EffectMeta = {
 export type EffectProps = {
   hub: TrackerHub;
   quality: Quality;
+  /** Hiện một thông báo ngắn trên thanh điều khiển (vd: cử chỉ vừa kích hoạt). Chỉ gọi khi có sự kiện, không gọi mỗi khung hình. */
+  notify?: (message: string) => void;
 };

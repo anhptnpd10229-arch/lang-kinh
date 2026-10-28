@@ -18,6 +18,8 @@ npm run typecheck    # tsc --noEmit
 npm run models       # copy MediaPipe WASM + download .task/.tflite models into public/mediapipe/
 ```
 
+`npm run build` and `npm run dev` share `.next/`: running a build while the dev server is up corrupts it (500s, `__webpack_modules__[moduleId] is not a function`). Stop dev, `rm -rf .next`, restart.
+
 No test runner yet. `spike/index.html` is a standalone MediaPipe FPS benchmark page (serve with `npx serve spike -l 5173`); record results in `spike/RESULTS.md`.
 
 ## Architecture

@@ -30,6 +30,7 @@ const SUBJECT: Record<TrackerKind, string> = {
 const DPR: Record<Quality, [number, number]> = { high: [1, 2], medium: [1, 1.5], low: [1, 1] };
 const HINT_MS = 5000;
 const LOST_MS = 3000;
+const TOAST_MS = 1600;
 
 export default function Player({ meta }: { meta: EffectMeta }) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -47,8 +48,17 @@ export default function Player({ meta }: { meta: EffectMeta }) {
   const [fps, setFps] = useState(0);
   const [lost, setLost] = useState(false);
   const [showHint, setShowHint] = useState(true);
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => setInApp(checkSupport().inAppBrowser), []);
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
+
+  const notify = useCallback((message: string) => {
+    setToast(message);
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(null), TOAST_MS);
+  }, []);
 
   const stop = useCallback(() => {
     if (startedAt.current) {
@@ -172,7 +182,7 @@ export default function Player({ meta }: { meta: EffectMeta }) {
             dpr={DPR[quality]}
           >
             <PerfProbe monitor={perfRef.current} />
-            <Effect hub={hubRef.current} quality={quality} />
+            <Effect hub={hubRef.current} quality={quality} notify={notify} />
           </Canvas>
         )}
       </div>
@@ -182,7 +192,9 @@ export default function Player({ meta }: { meta: EffectMeta }) {
           <div className="live-pill" role="status">Camera đang bật</div>
           <div className="player-bar">
             <p className="player-hint" aria-live="polite">
-              {lost ? `Không thấy ${subject} — hãy đưa ${subject} vào khung hình và đủ sáng.` : showHint ? meta.howTo[0] : meta.title}
+              {lost
+                ? `Không thấy ${subject} — hãy đưa ${subject} vào khung hình và đủ sáng.`
+                : (toast ?? (showHint ? meta.howTo[0] : meta.title))}
             </p>
             <span className="player-fps">{fps ? `${fps.toFixed(0)} fps · ${quality}` : ""}</span>
             <button className="btn" onClick={stop}>Thoát</button>
