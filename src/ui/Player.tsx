@@ -5,12 +5,13 @@
 import { Canvas, useFrame } from "@react-three/fiber";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
+import { EffectBus } from "@/core/bus";
 import { CAMERA_ERROR_TEXT, checkSupport, classifyCameraError, openCamera, stopCamera } from "@/core/camera";
 import { initialQuality, PerfMonitor, fpsBucket, type Quality } from "@/core/perf";
 import { track } from "@/core/telemetry";
 import { TrackerHub, type TrackerKind } from "@/core/tracker-hub";
 import { EFFECT_LOADERS } from "@/effects/loaders";
-import type { EffectMeta, EffectProps } from "@/effects/types";
+import type { EffectMeta, EffectProps, OverlayProps } from "@/effects/types";
 
 type Phase =
   | { kind: "idle" }
@@ -43,6 +44,8 @@ export default function Player({ meta }: { meta: EffectMeta }) {
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [inApp, setInApp] = useState(false);
   const [Effect, setEffect] = useState<ComponentType<EffectProps> | null>(null);
+  const [Overlay, setOverlay] = useState<ComponentType<OverlayProps> | null>(null);
+  const busRef = useRef<EffectBus | null>(null);
   const [quality, setQuality] = useState<Quality>("medium");
   const [aspect, setAspect] = useState(4 / 3);
   const [fps, setFps] = useState(0);
@@ -75,6 +78,8 @@ export default function Player({ meta }: { meta: EffectMeta }) {
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     setEffect(null);
+    setOverlay(null);
+    busRef.current = null;
     setPhase({ kind: "idle" });
   }, [meta.slug]);
 
@@ -125,7 +130,9 @@ export default function Player({ meta }: { meta: EffectMeta }) {
         hub.stride = next === "low" ? 2 : 1;
       });
       track("model_loaded", { slug: meta.slug, ms: Math.round(performance.now() - t0), delegate: hub.delegate });
+      busRef.current = new EffectBus();
       setEffect(() => mod.default);
+      setOverlay(() => mod.Overlay ?? null);
       startedAt.current = performance.now();
       detectedOnce.current = false;
       setShowHint(true);
@@ -178,20 +185,25 @@ export default function Player({ meta }: { meta: EffectMeta }) {
         style={{ "--ar": aspect } as React.CSSProperties}
       >
         <video ref={videoRef} playsInline muted />
-        {running && Effect && hubRef.current && videoRef.current && (
+        {running && Effect && hubRef.current && videoRef.current && busRef.current && (
           <Canvas
             camera={{ fov: 63, near: 1, far: 2000, position: [0, 0, 0] }}
             gl={{ alpha: true, antialias: quality !== "low", powerPreference: "high-performance" }}
             dpr={DPR[quality]}
           >
             <PerfProbe monitor={perfRef.current} />
-            <Effect hub={hubRef.current} quality={quality} notify={notify} video={videoRef.current} />
+            <Effect hub={hubRef.current} quality={quality} notify={notify} video={videoRef.current} bus={busRef.current} />
           </Canvas>
         )}
       </div>
 
       {running ? (
         <>
+          {Overlay && busRef.current && (
+            <div className="effect-overlay">
+              <Overlay bus={busRef.current} notify={notify} />
+            </div>
+          )}
           <div className="live-pill" role="status">Camera đang bật</div>
           <div className="player-bar">
             <p className="player-hint" aria-live="polite">

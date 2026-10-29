@@ -103,3 +103,50 @@ h2 { font-size: 20px; margin: 40px 0 12px; }
   padding: 10px 10px 10px 16px; border-radius: 999px; background: rgba(0,0,0,.55); backdrop-filter: blur(8px); }
 .player-hint { flex: 1; margin: 0; font-size: 14px; }
 .player-fps { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* Lớp giao diện riêng của effect: phủ toàn khung, chỉ các nút nhận chuột/chạm. */
+.effect-overlay { position: absolute; inset: 0; pointer-events: none; }
+.effect-overlay button, .effect-overlay dl { pointer-events: auto; }
+
+/* AETHER */
+.ae { --ae: #8fe9ff; position: absolute; inset: 0; color: #e6f7ff; transition: opacity .6s; }
+.ae > :not(.ae-bottom) { transition: opacity .6s; }
+.ae-dim > :not(.ae-bottom):not(.ae-mark):not(.ae-guide) { opacity: .25; }
+.ae-mark { position: absolute; top: max(14px, env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+  font-family: var(--font-display), system-ui, sans-serif; font-weight: 500; font-size: 15px; letter-spacing: .55em; padding-left: .55em;
+  color: var(--ae); text-shadow: 0 0 18px rgba(80, 200, 255, .55); }
+.ae-status { position: absolute; top: calc(max(12px, env(safe-area-inset-top)) + 40px); left: 12px; display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px; border-radius: 999px; background: rgba(4, 12, 20, .55); backdrop-filter: blur(6px); font-size: 12px; }
+.ae-state { color: #8fb3c4; }
+.ae-dot { width: 8px; height: 8px; border-radius: 50%; background: #8a8780; }
+.ae-tracked { background: var(--ae); box-shadow: 0 0 10px var(--ae); }
+.ae-lost { background: #ffb36b; }
+.ae-tools { position: absolute; top: max(12px, env(safe-area-inset-top)); right: 12px; display: flex; gap: 8px; }
+.ae-icon { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; border: 1px solid rgba(143, 233, 255, .25);
+  background: rgba(4, 12, 20, .55); color: #e6f7ff; cursor: pointer; backdrop-filter: blur(6px); }
+.ae-icon:hover { border-color: var(--ae); }
+.ae-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.ae-icon[aria-pressed="true"] { color: var(--ae); border-color: var(--ae); }
+.ae-text { width: auto; padding: 0 14px; border-radius: 999px; font-size: 13px; }
+.ae-guide { position: absolute; top: calc(max(12px, env(safe-area-inset-top)) + 48px); right: 12px; margin: 0; padding: 12px 14px; width: min(260px, calc(100% - 24px));
+  border-radius: 12px; background: rgba(4, 12, 20, .72); backdrop-filter: blur(8px); border: 1px solid rgba(143, 233, 255, .15); font-size: 13px; }
+.ae-guide div { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; }
+.ae-guide dt { color: var(--ae); }
+.ae-guide dd { margin: 0; color: #a9c4d1; text-align: right; }
+.ae-intro { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); width: min(340px, calc(100% - 32px)); text-align: center;
+  padding: 18px 20px; border-radius: 14px; background: rgba(4, 12, 20, .6); backdrop-filter: blur(8px); border: 1px solid rgba(143, 233, 255, .18); }
+.ae-intro p { margin: 0; color: #a9c4d1; font-size: 14px; }
+.ae-intro .ae-intro-title { color: #e6f7ff; font-family: var(--font-display), system-ui, sans-serif; font-size: 18px; margin-bottom: 6px; }
+.ae-bottom { position: absolute; left: 50%; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 70px); transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.ae-meter { width: 180px; height: 3px; border-radius: 3px; background: rgba(143, 233, 255, .18); overflow: hidden; }
+.ae-meter span { display: block; height: 100%; background: linear-gradient(90deg, #3c7bff, var(--ae), #fff); transform-origin: left; transition: transform .1s linear; }
+.ae-release { padding: 10px 22px; border-radius: 999px; border: 1px solid rgba(143, 233, 255, .5); background: rgba(10, 40, 60, .55);
+  color: #e6f7ff; font-family: var(--font-display), system-ui, sans-serif; letter-spacing: .12em; text-transform: uppercase; font-size: 12px; cursor: pointer;
+  box-shadow: 0 0 24px rgba(80, 200, 255, .25); backdrop-filter: blur(6px); }
+.ae-release:hover { border-color: var(--ae); }
+@media (max-width: 520px) {
+  .ae-mark { font-size: 13px; top: calc(max(12px, env(safe-area-inset-top)) + 44px); }
+  .ae-status { top: auto; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 66px); }
+  .ae-bottom { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 110px); }
+}
