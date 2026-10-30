@@ -12,6 +12,7 @@ import { track } from "@/core/telemetry";
 import { TrackerHub, type TrackerKind } from "@/core/tracker-hub";
 import { EFFECT_LOADERS } from "@/effects/loaders";
 import type { EffectMeta, EffectProps, OverlayProps } from "@/effects/types";
+import { BackIcon, LockIcon } from "./icons";
 
 type Phase =
   | { kind: "idle" }
@@ -217,7 +218,13 @@ export default function Player({ meta }: { meta: EffectMeta }) {
         </>
       ) : (
         <div className="player-overlay">
-          <Link href={`/works/${meta.slug}/`} className="back">← {meta.title}</Link>
+          <span className="player-blob b1" aria-hidden="true" />
+          <span className="player-blob b2" aria-hidden="true" />
+          <span className="player-blob b3" aria-hidden="true" />
+          <Link href={`/works/${meta.slug}/`} className="back">
+            <BackIcon />
+            {meta.title}
+          </Link>
           <div className="player-card">
             <h1>{meta.title}</h1>
             {phase.kind === "idle" && (
@@ -227,9 +234,19 @@ export default function Player({ meta }: { meta: EffectMeta }) {
                     Bạn đang mở trong ứng dụng (Zalo, Facebook…), camera có thể bị chặn. Hãy chọn “Mở bằng trình duyệt” trong menu ⋯.
                   </p>
                 )}
-                <ul className="howto">{meta.howTo.map((h) => <li key={h}>{h}</li>)}</ul>
+                <ol className="steps">
+                  {meta.howTo.map((h, i) => (
+                    <li key={h}>
+                      <span className={`step-n tone-${i % 3}`}>{i + 1}</span>
+                      <span>{h}</span>
+                    </li>
+                  ))}
+                </ol>
                 <button className="btn primary" onClick={start}>Bắt đầu trải nghiệm</button>
-                <p className="fine">Hình ảnh được xử lý ngay trên thiết bị của bạn. Không ghi lại, không gửi đi.</p>
+                <p className="fine">
+                  <LockIcon />
+                  Hình ảnh được xử lý ngay trên thiết bị của bạn. Không ghi lại, không gửi đi.
+                </p>
               </>
             )}
             {phase.kind === "requesting" && <p>Đang xin quyền camera… Hãy chọn “Cho phép” khi trình duyệt hỏi.</p>}

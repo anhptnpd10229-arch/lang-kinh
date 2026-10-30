@@ -8,4 +8,5 @@ export const EFFECT_LOADERS: Record<string, Loader> = {
   "net-ve-khong-trung": () => import("./net-ve-khong-trung/Effect"),
   "tiem-giat": () => import("./tiem-giat/Effect"),
   aether: () => import("./aether/Effect"),
+  "chien-binh": () => import("./chien-binh/Effect"),
 };
